@@ -4,9 +4,9 @@ require("dotenv").config();
 
 const authMiddlewears = async (req, res, next) => {
     try {
-        // Check if the authorization header exists and starts with "Bearer"
+
         if (req?.headers?.authorization?.startsWith('Bearer')) {
-            // Extract the token
+
             const token = req.headers.authorization.split(" ")[1];
 
             if (!token) {
@@ -16,7 +16,6 @@ const authMiddlewears = async (req, res, next) => {
                 });
             }
 
-            // Verify the token
             const verifyToken = jwt.verify(token, process.env.JWT_SECRET);
             if (!verifyToken) {
                 return res.status(403).json({
@@ -24,7 +23,7 @@ const authMiddlewears = async (req, res, next) => {
                     message: "Invalid token.",
                 });
             }
-            // Find the user by ID
+
             const user = await User.findById(verifyToken.id);
             if (!user) {
                 return res.status(404).json({
@@ -32,9 +31,6 @@ const authMiddlewears = async (req, res, next) => {
                     message: "User not found.",
                 });
             }
-            req.user = user;
-
-            // Attach the user to the request object and proceed to the next middleware
             req.user = user;
             next();
         } else {

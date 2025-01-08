@@ -2,7 +2,9 @@ const User = require("../models/userModel");
 const bcrypt = require("bcrypt");
 const { generateToken } = require("../config/jsonwebtoken");
 const { generateRefreshToken } = require("../config/refreshToken")
-const jwt = require("jsonwebtoken")
+const jwt = require("jsonwebtoken");
+const sendEmail = require("./emailCtrl");
+const crypto = require("crypto")
 // Create User
 const createUser = async (req, res) => {
     const { firstName, lastName, email, mobile, password } = req.body;
@@ -313,6 +315,136 @@ const updateUser = async (req, res) => {
 
 }
 
+const updatePassword = async (req, res) => {
+    const { id } = req.user;
+    const newPassword = req.body.password;
+    try {
+
+        if (!id) {
+            return res.status(404).json({
+                success: false,
+                message: "User is not authenticated"
+            })
+        }
+
+        if (!newPassword) {
+            return res.status(404).json({
+                success: false,
+                message: "Password is required"
+            })
+        }
+
+        const findUser = await User.findById(id);
+        if (!findUser) {
+            return res.status(404).json({
+                success: false,
+                message: "Unable to find the User"
+            })
+        }
+
+        const hashedPass = await bcrypt.hash(newPassword, 10);
+        findUser.password = hashedPass;
+        await findUser.save();
+        res.status(200).json({
+            success: true,
+            message: "Password Updated Successfully",
+            user: findUser
+        })
+    } catch (error) {
+        res.status(504).json({
+            success: false,
+            message: "Error occured while updating a password",
+            error: error.message
+        })
+    }
+}
+
+const resetPassToken = async (req, res) => {
+    const { email } = req.body;
+
+    try {
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+
+        const token = await user.createPasswordResetToken();
+        await user.save();
+
+        const resetUrl = `Hi Please follow this link to reset the Password. This link is only valid for 10 minutes from now. <a href='http://localhost:8080/api/v1/user/reset-pass/${token}'>Click Here</a>`;
+
+        const data = {
+            to: email,
+            text: "Hey User",
+            subject: "Forgot Password Link",
+            html: resetUrl,
+        };
+
+        await sendEmail(data);
+
+        res.status(200).json({
+            success: true,
+            token,
+        });
+    } catch (error) {
+        res.status(504).json({
+            success: false,
+            message: "Error occurred while sending mail",
+            error: error.message,
+        });
+    }
+};
+
+
+const resetPassword = async (req, res) => {
+
+    const { token } = req.params;
+    const { password } = req.body;
+    try {
+
+        if (!token) {
+            return res.status(404).json({
+                success: false,
+                message: "Unable to find the token"
+            })
+        }
+
+        const hashedPass = await bcrypt.hash(password, 10)
+        const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+        const findUser = await User.findOne({
+            passwordResetToken: hashedToken,
+            passwordResetExpires: { $gt: Date.now() }
+        });
+        if (!findUser) {
+            return res.status(404).json({
+                success: false,
+                message: "Unable to find the User from the token"
+            });
+        }
+
+        findUser.password = hashedPass;
+        findUser.passwordResetExpires = undefined;
+        findUser.passwordResetToken = undefined;
+        await findUser.save();
+
+        res.status(200).json({
+            success: true,
+            user: findUser
+        })
+
+    } catch (error) {
+        res.status(504).json({
+            success: false,
+            message: "Server error while Forgoting password",
+            error: error.message
+        })
+    }
+}
+
 
 const blockUser = async (req, res) => {
     const { id } = req.params;
@@ -372,4 +504,4 @@ const unBlockUser = async (req, res) => {
 }
 
 
-module.exports = { createUser, loginUser, logout, getAllUsers, getAUser, deleteUser, updateUser, blockUser, unBlockUser, handleRefreshToken }
+module.exports = { createUser, resetPassword, resetPassToken, updatePassword, loginUser, logout, getAllUsers, getAUser, deleteUser, updateUser, blockUser, unBlockUser, handleRefreshToken }

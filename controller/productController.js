@@ -39,20 +39,16 @@ const getAllProducts = async (req, res) => {
         const excludedFields = ['page', 'sort', 'limit', 'fields'];
         excludedFields.forEach((el) => delete queryObj[el]);
 
-        // Add $ prefix for MongoDB operators
         let queryStr = JSON.stringify(queryObj);
         queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, (match) => `$${match}`);
 
-        // Create a query object
         let query = Product.find(JSON.parse(queryStr));
 
-        // Sorting
         if (req.query.sortItems) {
             const sortBy = req.query.sortItems.split(",").join(" ");
             query = query.sort(sortBy);
         }
 
-        // Limiting the fields
         if (req.query.fields) {
             const fields = req.query.fields.split(",").join(" ");
             query = query.select(fields);
@@ -60,7 +56,6 @@ const getAllProducts = async (req, res) => {
             query = query.select("-__v");
         }
 
-        // Pagination
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
@@ -101,8 +96,6 @@ const getAllProducts = async (req, res) => {
         });
     }
 };
-
-
 
 
 const getAProduct = async (req, res) => {
