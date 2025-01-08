@@ -170,20 +170,31 @@ const updateProduct = async (req, res) => {
 }
 
 
-const delProduct = async (req, res) => {
+const deleteProduct = async (req, res) => {
     const { id } = req.params;
     try {
+        const delProduct = await Product.findByIdAndDelete(id);
 
+        if (!delProduct) {
+            return res.status(404).json({
+                success: false,
+                message: "Unable to delete the Product."
+            })
+        }
 
+        res.status(200).json({
+            success: true,
+            message: "Product deleted Successfully.."
+        })
 
     } catch (error) {
-        return res.status(501).json({
+        res.status(504).json({
             success: false,
-            message: "Some type of Server Error in deleting a Product",
-            message: error.message
+            message: "Error occured while deleting Product.",
+            error: error.message
         })
     }
 }
 
 
-module.exports = { createProduct, getAllProducts, getAProduct, updateProduct, delProduct }
+module.exports = { createProduct, getAllProducts, getAProduct, updateProduct, deleteProduct }
