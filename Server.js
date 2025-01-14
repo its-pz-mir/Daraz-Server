@@ -6,6 +6,7 @@ const dbConnect = require("./config/db");
 const authRouter = require("./routes/authRoute");
 var cookieParser = require('cookie-parser');
 const productRouter = require("./routes/productRoute");
+const blogRouter = require("./routes/blogRoute");
 
 // Middlewares
 const port = process.env.PORT;
@@ -22,7 +23,9 @@ app.get("/", (req, res) => {
 
 // Routes
 app.use("/api/v1/user", authRouter);
-app.use("/api/v1/product", productRouter)
+app.use("/api/v1/product", productRouter);
+app.use("/api/v1/blog", blogRouter);
+
 
 dbConnect().then(() => {
     app.listen(port, () => {
