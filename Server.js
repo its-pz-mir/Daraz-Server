@@ -7,6 +7,7 @@ var cookieParser = require('cookie-parser');
 const productRouter = require("./routes/productRoute");
 const blogRouter = require("./routes/blogRoute");
 const categoryRouter = require("./routes/categoryRoute");
+const blogCatRouter = require("./routes/BlogCatRoute");
 
 // Middlewares
 const port = process.env.PORT;
@@ -25,7 +26,8 @@ app.get("/", (req, res) => {
 app.use("/api/v1/user", authRouter);
 app.use("/api/v1/product", productRouter);
 app.use("/api/v1/blog", blogRouter);
-app.use("/api/v1/category", categoryRouter)
+app.use("/api/v1/category", categoryRouter);
+app.use("/api/v1/blogcat", blogCatRouter)
 
 
 dbConnect().then(() => {
