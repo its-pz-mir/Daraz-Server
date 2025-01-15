@@ -7,6 +7,6 @@ const BlogCatSchema = mongoose.Schema({
         index: true,
         unique: true
     }
-});
+}, { timestamps: true });
 
 module.exports = mongoose.model("Blogcat", BlogCatSchema)

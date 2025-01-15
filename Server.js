@@ -8,6 +8,7 @@ const productRouter = require("./routes/productRoute");
 const blogRouter = require("./routes/blogRoute");
 const categoryRouter = require("./routes/categoryRoute");
 const blogCatRouter = require("./routes/BlogCatRoute");
+const brandRouter = require("./routes/brandRouter");
 
 // Middlewares
 const port = process.env.PORT;
@@ -27,7 +28,8 @@ app.use("/api/v1/user", authRouter);
 app.use("/api/v1/product", productRouter);
 app.use("/api/v1/blog", blogRouter);
 app.use("/api/v1/category", categoryRouter);
-app.use("/api/v1/blogcat", blogCatRouter)
+app.use("/api/v1/blogcat", blogCatRouter);
+app.use("/api/v1/brand", brandRouter)
 
 
 dbConnect().then(() => {
