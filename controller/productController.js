@@ -1,21 +1,21 @@
 const slugify = require("slugify")
 const Product = require("../models/productModel");
+const User = require("../models/userModel");
+const cloudinary = require('cloudinary').v2;
+require("dotenv").config();
+
+cloudinary.config({
+    cloud_name: process.env.CLOUD_NAME,
+    api_key: process.env.API_KEY,
+    api_secret: process.env.SECRET_KEY
+})
 
 const createProduct = async (req, res) => {
 
-    const { title, description, price, quantity, brand, category, sold, images, colors } = req.body;
-
+    const { title, description, price, quantity, brand, category, sold, colors } = req.body;
     try {
-        if (!title || !description || !price || !quantity || !category || !brand || !sold || !images || !colors) {
-            return res.status(404).json({
-                success: false,
-                message: "Please Provide all Data"
-            })
-        }
         const slug = slugify(title);
-        console.log(slug);
-
-        const newProduct = await new Product({ title, slug, description, price, quantity, category, brand, sold, images, colors })
+        const newProduct = await new Product({ title, slug, description, price, quantity, category, brand, sold, colors })
         await newProduct.save();
 
         res.status(200).json({
@@ -31,7 +31,6 @@ const createProduct = async (req, res) => {
         })
     }
 }
-
 
 const getAllProducts = async (req, res) => {
     try {
@@ -72,7 +71,6 @@ const getAllProducts = async (req, res) => {
             }
         }
 
-        // Execute the query
         const products = await query;
 
         if (!products || products.length === 0) {
@@ -96,7 +94,6 @@ const getAllProducts = async (req, res) => {
         });
     }
 };
-
 
 const getAProduct = async (req, res) => {
     const { id } = req.params;
@@ -196,5 +193,153 @@ const deleteProduct = async (req, res) => {
     }
 }
 
+const addToWishlist = async (req, res) => {
+    const { _id } = req.user;
+    const { prodId } = req.body;
+    try {
 
-module.exports = { createProduct, getAllProducts, getAProduct, updateProduct, deleteProduct }
+        const user = await User.findById(_id)
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "Unable to find the User"
+            })
+        }
+
+        const alreadyAdded = user.wishlist.find((prod) => prod.toString() === prodId.toString());
+
+        if (alreadyAdded) {
+            const updateUser = await User.findByIdAndUpdate(_id, {
+                $pull: { wishlist: prodId }
+            }, { new: true });
+
+            return res.status(200).json({
+                success: true,
+                message: "Successfully Removed from wishlist",
+                user: updateUser
+            })
+        } else {
+            const updatedUser = await User.findByIdAndUpdate(_id, {
+                $push: { wishlist: prodId }
+            }, { new: true });
+            res.status(200).json({
+                success: true,
+                message: "Successfully Added to WishList",
+                user: updatedUser
+            })
+        }
+
+    } catch (error) {
+        res.status(504).json({
+            success: false,
+            message: "Error occured while Adding to Wishlist",
+            error: error.message
+        })
+    }
+}
+
+const rating = async (req, res) => {
+    const { _id } = req.user;
+    const { star, prodId, comment } = req.body;
+
+    try {
+        const product = await Product.findById(prodId);
+        if (!product) {
+            return res.status(404).json({
+                success: false,
+                message: "Unable to find the Product",
+            });
+        }
+
+        const alreadyRated = product.ratings.find((rating) => rating.postedBy.toString() === _id.toString());
+
+        if (alreadyRated) {
+            await Product.updateOne(
+                { _id: prodId, "ratings.postedBy": _id },
+                { $set: { "ratings.$.star": star, "ratings.$.comment": comment } },
+                { new: true }
+            );
+        } else {
+            await Product.findByIdAndUpdate(
+                prodId,
+                { $push: { ratings: { star: star, comment: comment, postedBy: _id } } },
+                { new: true }
+            );
+        }
+
+        // Recalculate the average rating
+        const updatedProduct = await Product.findById(prodId);
+        const totalRatings = updatedProduct.ratings.length;
+        const ratingSum = updatedProduct.ratings.reduce((sum, item) => sum + item.star, 0);
+        const actualRating = Math.round(ratingSum / totalRatings);
+
+        // Update the product with the new average rating
+        const finalProduct = await Product.findByIdAndUpdate(
+            prodId,
+            { totalRatings: actualRating },
+            { new: true }
+        );
+
+        // Send the final product as the response
+        return res.status(200).json({
+            success: true,
+            Product: finalProduct,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Server Error while Rating",
+            error: error.message,
+        });
+    }
+};
+
+const uploadImage = async (req, res) => {
+    const { id } = req.params;
+    const files = req.files;
+
+    try {
+        if (!files || files.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "No files found"
+            });
+        }
+
+        const imageUrls = [];
+
+        for (const file of files) {
+            const base64Image = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
+
+            const result = await cloudinary.uploader.upload(base64Image, {
+                folder: "ecommerce",
+                resource_type: "image",
+                width: 500,
+                height: 500,
+                crop: "fill",
+                gravity: "auto",
+                quality: "auto:good",
+            });
+
+            imageUrls.push(result.secure_url);
+        }
+
+        const updatedProduct = await Product.findByIdAndUpdate(id, { images: imageUrls }, { new: true });
+
+        res.status(200).json({
+            success: true,
+            message: "Successfully uploaded images",
+            product: updatedProduct
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Server Error while uploading images",
+            error: error.message,
+        });
+    }
+};
+
+
+module.exports = { createProduct, getAllProducts, getAProduct, updateProduct, deleteProduct, addToWishlist, rating, uploadImage }

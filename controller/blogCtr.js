@@ -1,5 +1,14 @@
 const Blog = require("../models/blogModel");
 const User = require("../models/userModel");
+const cloudinary = require('cloudinary').v2;
+require("dotenv").config();
+
+cloudinary.config({
+    cloud_name: process.env.CLOUD_NAME,
+    api_key: process.env.API_KEY,
+    api_secret: process.env.SECRET_KEY
+})
+
 
 // POST new Blog
 const newBlog = async (req, res) => {
@@ -266,5 +275,51 @@ const disLikeBlog = async (req, res) => {
 };
 
 
+const uploadBlogImg = async (req, res) => {
+    const id = req.params.id;
+    const files = req.files;
+    try {
+        if (!files) {
+            return res.status(404).json({
+                success: false,
+                message: "No files found"
+            });
+        }
 
-module.exports = { newBlog, getABlog, getAllBlogs, updateBlog, likeBlog, disLikeBlog };
+        const imgUrls = [];
+
+        for (const img of files) {
+            const base64Image = `data:${img.mimetype};base64,${img.buffer.toString("base64")}`;
+
+            const result = await cloudinary.uploader.upload(base64Image, {
+                folder: "ecommerce",
+                resource_type: "image",
+                width: 500,
+                height: 500,
+                crop: "fill",
+                gravity: "auto",
+                quality: "auto:good",
+            });
+
+            imgUrls.push(result.secure_url);
+        }
+
+        const updatedBlog = await Blog.findByIdAndUpdate(id, { images: imgUrls }, { new: true });
+        res.status(200).json({
+            success: true,
+            message: "Images uploaded successfully",
+            blog: updatedBlog
+        })
+
+    } catch (error) {
+        res.status(501).json({
+            success: false,
+            message: "Server error while uploading the image",
+            error: error.message
+        })
+    }
+}
+
+
+
+module.exports = { newBlog, getABlog, getAllBlogs, updateBlog, likeBlog, disLikeBlog, uploadBlogImg };

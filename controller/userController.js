@@ -106,6 +106,77 @@ const loginUser = async (req, res) => {
     }
 }
 
+const loginAdmin = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(401).json({
+                success: false,
+                message: "All fields are required."
+            })
+        }
+
+        const findAdmin = await User.findOne({ email });
+        if (!findAdmin) {
+            return res.status(401).json({
+                success: false,
+                message: "User not Found"
+            })
+        }
+
+        if (!findAdmin.role === "admin") {
+            return res.status(401).json({
+                success: false,
+                message: "User is not Authorized"
+            })
+        }
+
+        const matchPass = await bcrypt.compare(password, findAdmin.password)
+        if (!matchPass) {
+            return res.status(500).json({
+                success: false,
+                message: "Password does not match"
+            })
+        } else {
+            const refreshToken = generateRefreshToken(findAdmin?._id);
+            const updateUser = await User.findByIdAndUpdate(findAdmin?._id, {
+                refreshToken: refreshToken
+            }, { new: true });
+
+            if (!updateUser) {
+                return res.status(500).json({
+                    success: false,
+                    message: "Error of Refresh Token"
+                })
+            }
+            res.cookie("refreshToken", refreshToken, {
+                httpOnly: true,
+                maxAge: 72 * 60 * 60 * 1000
+            });
+
+            res.status(200).json({
+                id: findAdmin?._id,
+                firstName: findAdmin?.firstName,
+                lastName: findAdmin?.lastName,
+                mobile: findAdmin?.mobile,
+                email: findAdmin?.email,
+                role: findAdmin?.role,
+                address: findAdmin?.address,
+                cart: findAdmin?.cart,
+                wishlist: findAdmin?.wishlist,
+                token: generateToken(findAdmin?._id),
+            })
+        }
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Error occued while logging In",
+            error: error.message
+        })
+    }
+}
+
 
 const handleRefreshToken = async (req, res) => {
     const { refreshToken } = req.cookies;
@@ -504,4 +575,4 @@ const unBlockUser = async (req, res) => {
 }
 
 
-module.exports = { createUser, resetPassword, resetPassToken, updatePassword, loginUser, logout, getAllUsers, getAUser, deleteUser, updateUser, blockUser, unBlockUser, handleRefreshToken }
+module.exports = { createUser, resetPassword, resetPassToken, updatePassword, loginUser, loginAdmin, logout, getAllUsers, getAUser, deleteUser, updateUser, blockUser, unBlockUser, handleRefreshToken }
