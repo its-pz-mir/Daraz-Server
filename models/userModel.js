@@ -37,10 +37,11 @@ const userSchema = mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "cart"
     }],
-    address: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "address"
-    }],
+
+    address: {
+        type: String,
+    },
+
     wishlist: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: "wishlist"

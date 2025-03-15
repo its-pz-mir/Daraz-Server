@@ -3,6 +3,7 @@ const { createProduct, getAllProducts, getAProduct, updateProduct, deleteProduct
 const productRouter = express.Router();
 const { isAdmin, authMiddlewears } = require("../middlewears/authMiddlewar");
 const upload = require("../middlewears/multerMiddlewear");
+const { saveAddress } = require("../controller/userController");
 
 productRouter.post("/", authMiddlewears, isAdmin, createProduct);
 productRouter.get("/product/:id", getAProduct)

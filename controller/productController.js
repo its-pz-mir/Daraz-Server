@@ -238,6 +238,33 @@ const addToWishlist = async (req, res) => {
     }
 }
 
+const getWishList = async (req, res) => {
+    const { _id } = req.user;
+    try {
+        const wishlist = await User.findById(_id).populate("wishlist");
+
+        if (!wishlist || wishlist.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "No wishlist found",
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Wishlist fetched successfully",
+            wishlist,
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Server Error while getting Wishlist",
+            error: error.message,
+        });
+    }
+}
+
 const rating = async (req, res) => {
     const { _id } = req.user;
     const { star, prodId, comment } = req.body;
@@ -341,5 +368,4 @@ const uploadImage = async (req, res) => {
     }
 };
 
-
-module.exports = { createProduct, getAllProducts, getAProduct, updateProduct, deleteProduct, addToWishlist, rating, uploadImage }
+module.exports = { createProduct, getAllProducts, getAProduct, updateProduct, deleteProduct, addToWishlist, rating, uploadImage, getWishList }

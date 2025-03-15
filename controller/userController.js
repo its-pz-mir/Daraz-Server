@@ -4,7 +4,13 @@ const { generateToken } = require("../config/jsonwebtoken");
 const { generateRefreshToken } = require("../config/refreshToken")
 const jwt = require("jsonwebtoken");
 const sendEmail = require("./emailCtrl");
-const crypto = require("crypto")
+const crypto = require("crypto");
+const Cart = require("../models/cartModel");
+const Product = require("../models/productModel");
+const Order = require("../models/orderModel")
+const coupenModel = require("../models/coupenModel");
+const uniqid = require('uniqid');
+
 // Create User
 const createUser = async (req, res) => {
     const { firstName, lastName, email, mobile, password } = req.body;
@@ -177,7 +183,6 @@ const loginAdmin = async (req, res) => {
     }
 }
 
-
 const handleRefreshToken = async (req, res) => {
     const { refreshToken } = req.cookies;
     try {
@@ -329,7 +334,6 @@ const getAUser = async (req, res) => {
     }
 }
 
-
 const deleteUser = async (req, res) => {
     const { id } = req.user;
     console.log(id);
@@ -355,7 +359,6 @@ const deleteUser = async (req, res) => {
         })
     }
 }
-
 
 const updateUser = async (req, res) => {
     const { id } = req.user;
@@ -469,7 +472,6 @@ const resetPassToken = async (req, res) => {
     }
 };
 
-
 const resetPassword = async (req, res) => {
 
     const { token } = req.params;
@@ -516,7 +518,6 @@ const resetPassword = async (req, res) => {
     }
 }
 
-
 const blockUser = async (req, res) => {
     const { id } = req.params;
     try {
@@ -544,7 +545,6 @@ const blockUser = async (req, res) => {
         })
     }
 }
-
 
 const unBlockUser = async (req, res) => {
     const { id } = req.params;
@@ -574,5 +574,286 @@ const unBlockUser = async (req, res) => {
     }
 }
 
+const saveAddress = async (req, res) => {
+    const { _id } = req.user;
+    try {
 
-module.exports = { createUser, resetPassword, resetPassToken, updatePassword, loginUser, loginAdmin, logout, getAllUsers, getAUser, deleteUser, updateUser, blockUser, unBlockUser, handleRefreshToken }
+        const user = await User.findByIdAndUpdate(_id, {
+            address: req.body.address
+        }, { new: true });
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "Unable to find a User"
+            })
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Address saved successfully",
+            user
+        })
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Error occured while saving address",
+            error: error.message
+        })
+    }
+}
+
+const userCart = async (req, res) => {
+
+    const { cart } = req.body;
+    const { _id } = req.user;
+    try {
+        let products = [];
+
+        const user = await User.findById(_id);
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "Unable to find a User"
+            })
+        }
+
+        const alreadyExistscart = await Cart.findOne({ orderedBy: user._id });
+        if (alreadyExistscart) {
+            await Cart.findOneAndDelete({ orderedBy: user?._id });
+        }
+
+        for (let i = 0; i < cart?.length; i++) {
+            let object = {};
+            object.product = cart[i]._id;
+            object.count = cart[i].count;
+            object.color = cart[i].color;
+            let getPrice = await Product.findById(cart[i]._id).select("price").exec();
+            object.price = getPrice.price;
+            products?.push(object);
+        }
+
+        let cartTotal = 0;
+        for (let i = 0; i < products?.length; i++) {
+            cartTotal = cartTotal + products[i].price * products[i].count;
+        }
+
+        let newCart = new Cart({
+            products,
+            cartTotal,
+            orderedBy: user?._id
+        })
+
+        await newCart.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Cart saved successfully",
+            cart: newCart
+        })
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Error occured while saving cart",
+            error: error.message
+        })
+    }
+}
+
+const getUserCart = async (req, res) => {
+    const { _id } = req.user;
+    try {
+        const cart = await Cart.findOne({ orderedBy: _id }).populate("products.product", "_id, title, price");
+        if (!cart) {
+            return res.status(404).json({
+                success: false,
+                message: "Cart is Empty"
+            })
+        }
+
+        res.status(200).json({
+            success: true,
+            cart
+        })
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Error occured while getting cart",
+            error: error.message
+        })
+    }
+}
+
+const applyCoupen = async (req, res) => {
+    const { coupen } = req.body;
+    const { _id } = req.user;
+    try {
+
+        const validateCoupen = await coupenModel.findOne({ name: coupen });
+        if (!validateCoupen) {
+            return res.status(404).json({
+                success: false,
+                message: "Cannot find this Coupen"
+            })
+        }
+
+        const user = await User.findById(_id);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "Cannot find the User"
+            })
+        }
+
+        const { products, cartTotal } = await Cart.findOne({ orderedBy: user?._id }).populate("products.product");
+        let totalAfterDiscount = cartTotal - (cartTotal * validateCoupen.discount / 100);
+        console.log(totalAfterDiscount);
+        await Cart.findOneAndUpdate({ orderedBy: user?._id }, { totalAfterDiscount }, { new: true });
+        res.status(200).json({
+            success: true,
+            message: "Coupen Applied Successfully",
+            totalAfterDiscount
+        })
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Error occured while getting cart",
+            error: error.message
+        })
+    }
+}
+
+const createOrder = async (req, res) => {
+    const { COD, coupenApplied } = req.body;
+    const { _id } = req.user;
+
+    try {
+
+        if (!COD) {
+            return res.status(404).json({
+                success: false,
+                message: "Create cash order failed"
+            })
+        }
+
+        const user = await User.findById(_id);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "Unable to find the User"
+            })
+        }
+
+        let userCart = await Cart.findOne({ orderedBy: user?._id });
+        let finalAmount = 0;
+        if (coupenApplied && userCart?.totalAfterDiscount) {
+            console.log(userCart?.totalAfterDiscount);
+            finalAmount = userCart?.totalAfterDiscount * 100;
+            console.log(finalAmount);
+
+        } else {
+            finalAmount = userCart?.cartTotal * 100;
+        }
+
+        let newOrder = new Order({
+            products: userCart?.products,
+            paymentIntent: {
+                id: uniqid(),
+                method: "COD",
+                amount: finalAmount,
+                status: "Cash on Deleivery",
+                created: Date.now(),
+                currency: "usd",
+            },
+            orderBy: user?._id,
+            orderStatus: "Cash on Deleivery",
+        }).save();
+
+        let update = userCart.products.map((item) => {
+            return {
+                updateOne: {
+                    filter: { _id: item.product._id },
+                    update: { $inc: { quantity: -item.count, sold: +item.count } }
+                }
+            }
+        });
+
+        const updated = await Product.bulkWrite(update, {});
+
+        res.json({
+            success: true,
+            message: "Order created successfully",
+            newOrder
+        })
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Error occured while creating Order",
+            error: error.message
+        })
+    }
+
+}
+
+const getOrders = async (req, res) => {
+    const { _id } = req.user;
+    try {
+
+        const orders = await Order.find({ orderBy: _id }).populate("products.product");
+        if (!orders) {
+            return res.status(404).json({
+                success: false,
+                message: "No Orders found"
+            })
+        }
+
+        res.status(200).json({
+            success: true,
+            orders
+        })
+
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Error occured while getting Order",
+            error: error.message
+        })
+    }
+}
+
+const updateOrderStatus = async (req, res) => {
+    const { status } = req.body;
+    const { id } = req.params;
+    try {
+
+        const updatedOrder = await Order.findByIdAndUpdate(id, {
+            orderStatus: status,
+            paymentIntent: {
+                status: status
+            }
+        }, { new: true })
+
+
+
+        res.status(200).json({
+            success: true,
+            Order: updatedOrder
+        })
+
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Error occured while updating Order",
+            error: error.message
+        })
+    }
+}
+
+module.exports = { createUser, resetPassword, resetPassToken, updatePassword, loginUser, loginAdmin, logout, getAllUsers, getAUser, deleteUser, updateUser, blockUser, unBlockUser, handleRefreshToken, saveAddress, userCart, getUserCart, applyCoupen, createOrder, getOrders, updateOrderStatus }
